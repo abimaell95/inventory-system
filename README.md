@@ -574,12 +574,15 @@ app.listen(PORT, () => {
 ```
 
 
-# Parte 3: Implementación de Patrones de Diseño y Principios SOLID
+# Parte 3A: Implementación de Patrones de Diseño (Singleton, Factory Method, Observer)
 
-## Aplicación de Patrones de Diseño
+## 1. Patrón Singleton: Conexión a la Base de Datos
 
-### Patrón Singleton
-Utilizado para gestionar una única instancia de la conexión a la base de datos en `db.js`.
+**Descripción**: Gestionar una única instancia de la conexión a la base de datos.
+
+**Implementación**:
+
+**Archivo**: `config/db.js`
 ```javascript
 const mysql = require('mysql');
 const dotenv = require('dotenv');
@@ -623,8 +626,19 @@ Object.freeze(databaseInstance);
 module.exports = databaseInstance.getConnection();
 ```
 
-### Patrón Factory Method
-Utilizado para crear diferentes tipos de productos en `productFactory.js`.
+**Aplicación en el Proyecto**:
+- Actualiza los modelos para usar la instancia de conexión única.
+```javascript
+const connection = require('../config/db');
+```
+
+## 2. Patrón Factory Method: Creación de Productos
+
+**Descripción**: Crear diferentes tipos de productos (electrónicos, ropa, etc.).
+
+**Implementación**:
+
+**Archivo**: `models/productFactory.js`
 ```javascript
 class Product {
     constructor(name, description, price, quantity) {
@@ -666,8 +680,35 @@ class ProductFactory {
 module.exports = ProductFactory;
 ```
 
-### Patrón Observer
-Utilizado para notificar cambios en el estado de las órdenes en `orderObserver.js`.
+**Aplicación en el Proyecto**:
+- Actualiza el controlador para crear productos utilizando la fábrica.
+```javascript
+const ProductFactory = require('../models/productFactory');
+
+const createProduct = (req, res) => {
+    const { type, name, description, price, quantity, warranty, size, material } = req.body;
+    let newProduct;
+    try {
+        newProduct = ProductFactory.createProduct(type, name, description, price, quantity, warranty, size, material);
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
+    }
+    Product.create(newProduct, (err, product) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json(product);
+    });
+};
+```
+
+## 3. Patrón Observer: Notificaciones de Órdenes
+
+**Descripción**: Notificar a los usuarios cuando el estado de una orden cambia.
+
+**Implementación**:
+
+**Archivo**: `models/orderObserver.js`
 ```javascript
 class Order {
     constructor() {
@@ -686,7 +727,6 @@ class Order {
         this.observers.forEach(observer => observer.update(data));
     }
 
-    // Simulación de cambio de estado
     changeStatus(status) {
         this.notify({ status });
     }
@@ -698,138 +738,310 @@ class Observer {
     }
 }
 
+module.exports = { Order, Observer };
+```
+
+**Aplicación en el Proyecto**:
+- Actualiza el controlador para notificar los cambios de estado de las órdenes.
+```javascript
+const { Order, Observer } = require('../models/orderObserver');
+
 const order = new Order();
 const observer1 = new Observer();
-const observer2 = new Observer();
-
 order.subscribe(observer1);
-order.subscribe(observer2);
 
-order.changeStatus('completed'); // Notifica a los observadores
-```
-
-## Aplicación de Principios SOLID
-
-### Single Responsibility Principle (SRP)
-Cada clase y archivo debe tener una única responsabilidad. Ya hemos separado la lógica de la base de datos, el modelo, el controlador y las rutas.
-
-### Open/Closed Principle (OCP)
-Las entidades de software deben estar abiertas para extensión, pero cerradas para modificación.
-```javascript
-// Ejemplo en el modelo de producto
-const Product = {
-    getAll: (callback) => {
-        connection.query('SELECT * FROM products', (err, results) => {
-            if (err) {
-                return callback(err);
-            }
-            callback(null, results);
-        });
-    },
-    // Agrega nuevos métodos sin modificar los existentes
-    getByCategory: (category, callback) => {
-        connection.query('SELECT * FROM products WHERE category = ?', [category], (err, results) => {
-            if (err) {
-                return callback(err);
-            }
-            callback(null, results);
-        });
-    }
-    // Otros métodos...
+const updateOrderStatus = (req, res) => {
+    const { id, status } = req.body;
+    Order.updateStatus(id, status, (err, result) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        order.changeStatus(status);
+        res.json(result);
+    });
 };
-
-module.exports = Product;
 ```
 
-### Liskov Substitution Principle (LSP)
-Las clases derivadas deben ser sustituibles por sus clases base sin alterar el comportamiento esperado del programa.
+# Parte 3B: Implementación de Patrones de Diseño (Decorator, Strategy, Command)
+
+## 4. Patrón Decorator: Descuentos y Promociones
+
+**Descripción**: Añadir funcionalidades adicionales a los productos, como descuentos y promociones.
+
+**Implementación**:
+
+**Archivo**: `models/productDecorator.js`
 ```javascript
-// Ejemplo en la fábrica de productos
-const ProductFactory = require('./productFactory');
-
-const electronic = ProductFactory.createProduct('electronic', 'Laptop', 'A powerful laptop', 1000, 10, '2 years');
-const clothing = ProductFactory.createProduct('clothing', 'T-Shirt', 'A cool T-shirt', 20, 100, 'L', 'Cotton');
-
-// Podemos tratar `electronic` y `clothing` como instancias de `Product`
-console.log(electronic instanceof Product); // true
-console.log(clothing instanceof Product);   // true
-```
-
-### Interface Segregation Principle (ISP)
-Los clientes no deben estar obligados a depender de interfaces que no utilizan.
-```javascript
-// Ejemplo de separación de interfaces
 class Product {
-    constructor(name, description, price, quantity) {
+    constructor(name, description, price) {
         this.name = name;
         this.description = description;
         this.price = price;
-        this.quantity = quantity;
+    }
+
+    getPrice() {
+        return this.price;
     }
 }
 
-class Electronic extends Product {
-    constructor(name, description, price, quantity, warranty) {
-        super(name, description, price, quantity);
-        this.warranty = warranty;
+class ProductDecorator {
+    constructor(product) {
+        this.product = product;
     }
 
-    getWarrantyInfo() {
-        return `Warranty: ${this.warranty}`;
+    getPrice() {
+        return this.product.getPrice();
     }
 }
 
-class Clothing extends Product {
-    constructor(name, description, price, quantity, size, material) {
-        super(name, description, price, quantity);
-        this.size = size;
-        this.material = material;
+class DiscountDecorator extends ProductDecorator {
+    constructor(product, discount) {
+        super(product);
+        this.discount = discount;
     }
 
-    getSizeInfo() {
-        return `Size: ${this.size}`;
+    getPrice() {
+        return this.product.getPrice() * (1 - this.discount);
     }
 }
+
+class PromotionDecorator extends ProductDecorator {
+    constructor(product, promotion) {
+        super(product);
+        this.promotion = promotion;
+    }
+
+    getPrice() {
+        return this.product.getPrice() - this.promotion;
+    }
+}
+
+module.exports = { Product, DiscountDecorator, PromotionDecorator };
 ```
 
-### Dependency Inversion Principle (DIP)
-Los módulos de alto nivel no deben depender de módulos de bajo nivel. Ambos deben depender de abstracciones.
+**Aplicación en el Proyecto**:
+- Actualiza el controlador para aplicar descuentos y promociones a los productos.
 ```javascript
-// Ejemplo de inversión de dependencias
-class Database {
-    connect() {
+const { Product, DiscountDecorator, PromotionDecorator } = require('../models/productDecorator');
+
+const applyDiscount = (req, res) => {
+    const { id, discount } = req.body;
+    Product.getById(id, (err, product) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        const discountedProduct = new DiscountDecorator(product, discount);
+        res.json({ originalPrice: product.getPrice(), discountedPrice: discountedProduct.getPrice() });
+    });
+};
+
+const applyPromotion = (req, res) => {
+    const { id, promotion } = req.body;
+    Product.getById(id, (err, product) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        const promotedProduct = new PromotionDecorator(product, promotion);
+        res.json({ originalPrice: product.getPrice(), promotedPrice: promotedProduct.getPrice() });
+    });
+};
+```
+
+## 5. Patrón Strategy: Estrategias de Precios
+
+**Descripción**: Implementar diferentes estrategias de precios (temporada alta, temporada baja, descuentos por fidelidad).
+
+**Implementación**:
+
+**Archivo**: `models/priceStrategy.js`
+```javascript
+class PriceStrategy {
+    getPrice(basePrice) {
         throw new Error('Method not implemented');
     }
 }
 
-class MySQLDatabase extends Database {
-    connect() {
-        // Lógica para conectar a MySQL
-        console.log('Connecting to MySQL...');
+class HighSeasonStrategy extends PriceStrategy {
+    getPrice(basePrice) {
+        return basePrice * 1.2;
     }
 }
 
-class MongoDBDatabase extends Database {
-    connect() {
-        // Lógica para conectar a MongoDB
-        console.log('Connecting to MongoDB...');
+class LowSeasonStrategy extends PriceStrategy {
+    getPrice(basePrice) {
+        return basePrice * 0.8;
     }
 }
 
-class InventoryService {
-    constructor(database) {
-        this.database = database;
-    }
-
-    connectDatabase() {
-        this.database.connect();
+class LoyaltyDiscountStrategy extends PriceStrategy {
+    getPrice(basePrice) {
+        return basePrice * 0.9;
     }
 }
 
-// Uso del servicio con diferentes bases de datos
-const mysqlService = new InventoryService(new MySQLDatabase());
-mysqlService.connectDatabase();
+class PriceContext {
+    constructor(strategy) {
+        this.strategy = strategy;
+    }
 
-const mongoService = new InventoryService(new MongoDBDatabase());
-mongoService.connectDatabase();
+    setStrategy(strategy) {
+        this.strategy = strategy;
+    }
+
+    calculatePrice(basePrice) {
+        return this.strategy.getPrice(basePrice);
+    }
+}
+
+module.exports = { PriceContext, HighSeasonStrategy, LowSeasonStrategy, LoyaltyDiscountStrategy };
+```
+
+**Aplicación en el Proyecto**:
+- Actualiza el controlador para calcular precios utilizando diferentes estrategias.
+```javascript
+const { PriceContext, HighSeasonStrategy, LowSeasonStrategy, LoyaltyDiscountStrategy } = require('../models/priceStrategy');
+
+const calculatePrice = (req, res) => {
+    const { id, strategyType } = req.body;
+    Product.getById(id, (err, product) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        let strategy;
+        switch (strategyType) {
+            case 'highSeason':
+                strategy = new HighSeasonStrategy();
+                break;
+            case 'lowSeason':
+                strategy = new LowSeasonStrategy();
+                break;
+            case 'loyaltyDiscount':
+                strategy = new LoyaltyDiscountStrategy();
+                break;
+            default:
+                return res.status(400).json({ error: 'Invalid strategy type' });
+        }
+        const priceContext = new PriceContext(strategy);
+        res.json({ originalPrice: product.price, finalPrice: priceContext.calculatePrice(product.price) });
+    });
+};
+```
+
+## 6. Patrón Command: Operaciones de Inventario
+
+**Descripción**: Realizar operaciones de inventario (añadir, actualizar, eliminar productos) y permitir deshacer/rehacer operaciones.
+
+**Implementación**:
+
+**Archivo**: `models/inventoryCommand.js`
+```javascript
+class Command {
+    execute() {
+        throw new Error('Method not implemented');
+    }
+
+    undo() {
+        throw new Error('Method not implemented');
+    }
+}
+
+class AddProductCommand extends Command {
+    constructor(product, inventory) {
+        super();
+        this.product = product;
+        this.inventory = inventory;
+    }
+
+    execute() {
+        this.inventory.addProduct(this.product);
+    }
+
+    undo() {
+        this.inventory.removeProduct(this.product);
+    }
+}
+
+class RemoveProductCommand extends Command {
+    constructor(product, inventory) {
+        super();
+        this.product = product;
+        this.inventory = inventory;
+    }
+
+    execute() {
+        this.inventory.removeProduct(this.product);
+    }
+
+    undo() {
+        this.inventory.addProduct(this.product);
+    }
+}
+
+class Inventory {
+    constructor() {
+        this.products = [];
+    }
+
+    addProduct(product) {
+        this.products.push(product);
+        console.log(`Product added: ${product.name}`);
+    }
+
+    removeProduct(product) {
+        this.products = this.products.filter(p => p !== product);
+        console.log(`Product removed: ${product.name}`);
+    }
+
+    listProducts() {
+        return this.products;
+    }
+}
+
+class InventoryManager {
+    constructor() {
+        this.commands = [];
+    }
+
+    executeCommand(command) {
+        command.execute();
+        this.commands.push(command);
+    }
+
+    undoCommand() {
+        const command = this.commands.pop();
+        if (command) {
+            command.undo();
+        }
+    }
+}
+
+module.exports = { AddProductCommand, RemoveProductCommand, Inventory, InventoryManager };
+```
+
+**Aplicación en el Proyecto**:
+- Actualiza el controlador para realizar operaciones de inventario utilizando comandos.
+```javascript
+const { AddProductCommand, RemoveProductCommand, Inventory, InventoryManager } = require('../models/inventoryCommand');
+
+const inventory = new Inventory();
+const manager = new InventoryManager();
+
+const addProductToInventory = (req, res) => {
+    const product = req.body;
+    const addProductCommand = new AddProductCommand(product, inventory);
+    manager.executeCommand(addProductCommand);
+    res.json({ message: 'Product added to inventory', products: inventory.listProducts() });
+};
+
+const removeProductFromInventory = (req, res) => {
+    const product = req.body;
+    const removeProductCommand = new RemoveProductCommand(product, inventory);
+    manager.executeCommand(removeProductCommand);
+    res.json({ message: 'Product removed from inventory', products: inventory.listProducts() });
+};
+
+const undoLastCommand = (req, res) => {
+    manager.undoCommand();
+    res.json({ message: 'Last command undone', products: inventory.listProducts() });
+};
 ```
