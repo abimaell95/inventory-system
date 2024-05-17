@@ -573,6 +573,32 @@ app.listen(PORT, () => {
 });
 ```
 
+# Taller a Realizar - Reglas de Negocio/Nuevos Requerimientos
+
+## Conexión a la Base de Datos
+
+Solo debe haber una única instancia de la conexión a la base de datos en todo el sistema.
+
+## Creación de Productos
+
+Debe ser posible crear diferentes tipos de productos (electrónicos, ropa, etc.) utilizando un patrón de fábrica.
+
+## Notificaciones de Órdenes
+
+El sistema debe notificar a los usuarios cuando el estado de una orden cambia.
+
+## Descuentos y Promociones
+
+Los productos deben poder tener descuentos y promociones aplicadas dinámicamente.
+
+## Estrategias de Precios
+
+Los precios de los productos deben poder calcularse utilizando diferentes estrategias, como precios de temporada alta, temporada baja y descuentos por fidelidad.
+
+## Operaciones de Inventario
+
+Las operaciones de inventario, como añadir y eliminar productos, deben poder deshacerse y rehacerse.
+
 
 # Parte 3A: Implementación de Patrones de Diseño (Singleton, Factory Method, Observer)
 
